@@ -31,6 +31,9 @@ PROPERTY_LABELS: dict[str, dict[str, str]] = {
     "Manufacturer": {"en": "Manufacturer", "ru": "Производитель"},
     "Model": {"en": "Model", "ru": "Модель"},
     "MarketingName": {"en": "Marketing name", "ru": "Название модели"},
+    "SystemFamily": {"en": "System family", "ru": "Семейство устройства"},
+    "ProductName": {"en": "Product name", "ru": "Название устройства"},
+    "ProductVersion": {"en": "Product version", "ru": "Версия продукта"},
     "SystemType": {"en": "System type", "ru": "Тип системы"},
     "TotalPhysicalMemory": {"en": "Total memory", "ru": "Общий объём памяти"},
     "NumberOfProcessors": {"en": "Processor sockets", "ru": "Процессорных сокетов"},
@@ -200,8 +203,8 @@ class CollectorSpec:
 COLLECTOR_SPECS = (
     CollectorSpec(
         "overview",
-        "$system=Get-CimInstance Win32_ComputerSystem; $product=Get-CimInstance Win32_ComputerSystemProduct; [pscustomobject]@{Manufacturer=$system.Manufacturer;Model=$system.Model;MarketingName=$product.Version;SystemType=$system.SystemType;TotalPhysicalMemory=$system.TotalPhysicalMemory;NumberOfProcessors=$system.NumberOfProcessors;NumberOfLogicalProcessors=$system.NumberOfLogicalProcessors}",
-        ("Manufacturer", "Model", "MarketingName", "SystemType", "TotalPhysicalMemory", "NumberOfProcessors", "NumberOfLogicalProcessors"),
+        "$system=Get-CimInstance Win32_ComputerSystem; $product=Get-CimInstance Win32_ComputerSystemProduct; $bios=Get-ItemProperty -Path 'HKLM:\\HARDWARE\\DESCRIPTION\\System\\BIOS' -ErrorAction SilentlyContinue; [pscustomobject]@{Manufacturer=$system.Manufacturer;Model=$system.Model;SystemFamily=$(if($bios.SystemFamily){$bios.SystemFamily}else{$system.SystemFamily});ProductName=$(if($bios.SystemProductName){$bios.SystemProductName}else{$product.Name});ProductVersion=$product.Version;SystemType=$system.SystemType;TotalPhysicalMemory=$system.TotalPhysicalMemory;NumberOfProcessors=$system.NumberOfProcessors;NumberOfLogicalProcessors=$system.NumberOfLogicalProcessors}",
+        ("Manufacturer", "Model", "SystemFamily", "ProductName", "ProductVersion", "SystemType", "TotalPhysicalMemory", "NumberOfProcessors", "NumberOfLogicalProcessors"),
         table=False,
     ),
     CollectorSpec(

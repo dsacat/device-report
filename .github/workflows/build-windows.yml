@@ -72,3 +72,5 @@ jobs:
           git push origin HEAD:refs/heads/1.0.0
           $legacy = git ls-remote --heads origin refs/heads/v1.0.0
           if ($legacy) { git push origin --delete v1.0.0 }
+          $customization = git ls-remote --heads origin refs/heads/feature/report-customization
+          if ($customization) { git push origin --delete feature/report-customization }

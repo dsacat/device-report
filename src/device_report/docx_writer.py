@@ -213,12 +213,6 @@ def write_docx(report: ReportData, output_path: str | Path) -> Path:
     divider.alignment = WD_ALIGN_PARAGRAPH.CENTER
     divider_run = divider.add_run("━━━━━━━━━━━━━━━━━━━━━━━━")
     divider_run.font.color.rgb = RGBColor.from_string(ACCENT)
-    if report.selected_sections:
-        summary = document.add_paragraph()
-        summary.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        label = summary.add_run(f"{translate(report.language, 'included_sections')}: ")
-        label.bold = True
-        summary.add_run(", ".join(report.selected_sections))
     toc_label = "Содержание" if report.language == "ru" else "Contents"
     toc_heading = document.add_paragraph()
     toc_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT

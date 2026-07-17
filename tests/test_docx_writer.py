@@ -94,3 +94,15 @@ def test_writer_does_not_leak_excluded_sentinel_text(tmp_path):
     with ZipFile(output) as archive:
         package = b"".join(archive.read(name) for name in archive.namelist())
     assert b"SUPER_SECRET_SENTINEL" not in package
+
+
+def test_writer_does_not_list_enabled_tabs_on_cover(tmp_path):
+    report = sample_report()
+    report.selected_sections = ("ENABLED_TAB_SENTINEL",)
+    output = tmp_path / "report.docx"
+
+    write_docx(report, output)
+
+    with ZipFile(output) as archive:
+        package = b"".join(archive.read(name) for name in archive.namelist())
+    assert b"ENABLED_TAB_SENTINEL" not in package

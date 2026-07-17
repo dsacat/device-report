@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from device_report.cli import choose_sections
+from device_report.cli import choose_sections, run_application
 from device_report.collectors import COLLECTOR_SPECS, collect_all, collect_security, format_date_value
 from device_report.error_log import write_error_log
 from device_report.models import Diagnostic, Field, Section
@@ -69,6 +69,62 @@ class IdentityTests(TestCase):
         self.assertEqual(report.title, "IdeaPad 3 15ARE05")
         self.assertEqual(report.subtitle, "LENOVO 81W4")
 
+    def test_cross_vendor_marketing_identity_uses_best_human_readable_name(self):
+        overview = Section("overview", "Device overview", fields=[
+            Field("Manufacturer", "Acer"),
+            Field("Model", "N20C5"),
+            Field("System family", "Aspire 5"),
+            Field("Product name", "Aspire A515-57"),
+            Field("Product version", "V1.0"),
+        ])
+
+        report = build_report_data("en", [overview], [], now=FIXED)
+
+        self.assertEqual(report.title, "Aspire A515-57")
+        self.assertEqual(report.subtitle, "Acer N20C5")
+
+    def test_identity_is_collected_even_when_overview_is_not_selected(self):
+        captured = []
+
+        def collect_selected(runner, language, *, progress, selected_keys):
+            return [Section("cpu", "Processor")], []
+
+        def collect_identity(runner, language):
+            return Section("overview", "Device overview", fields=[
+                Field("Manufacturer", "Dell Inc."),
+                Field("Model", "0ABC"),
+                Field("Product name", "Latitude 7490"),
+            ])
+
+        def writer(report, path):
+            captured.append(report)
+            return path
+
+        with TemporaryDirectory() as directory:
+            result = run_application(
+                "en",
+                runner=object(),
+                collect_fn=collect_selected,
+                identity_fn=collect_identity,
+                writer=writer,
+                now=FIXED,
+                cwd=directory,
+                selected_keys=("cpu",),
+                output_fn=lambda _: None,
+            )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(captured[0].title, "Latitude 7490")
+        self.assertEqual(captured[0].subtitle, "Dell Inc. 0ABC")
+        self.assertEqual([section.key for section in captured[0].sections], ["cpu"])
+
+    def test_overview_query_uses_cross_vendor_safe_identity_fields(self):
+        overview = next(spec for spec in COLLECTOR_SPECS if spec.key == "overview")
+        for field in ("SystemFamily", "SystemProductName", "ProductVersion"):
+            self.assertIn(field, overview.script)
+        self.assertNotIn("UUID", overview.script)
+        self.assertNotIn("Serial", overview.script)
+
 
 class ErrorLogTests(TestCase):
     def test_no_diagnostics_create_no_logs_directory(self):
@@ -103,3 +159,8 @@ class PackagingTests(TestCase):
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
         self.assertIn("1.0.0:refs/remotes/origin/1.0.0", workflow)
+
+    def test_release_removes_completed_service_branches(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
+        self.assertIn("git push origin --delete feature/report-customization", workflow)

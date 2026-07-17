@@ -1,0 +1,55 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches:
+      - v1.0.0
+      - feat/device-report
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements-build.txt
+          python -m pip install --disable-pip-version-check --no-deps -e .
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build one-file executable
+        run: python -m PyInstaller DeviceReport.spec --clean --noconfirm
+
+      - name: Verify executable and help
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem -Path dist -File)
+          if ($files.Count -ne 1) { throw "dist must contain exactly one file" }
+          if ($files[0].Name -ne "DeviceReport.exe") { throw "unexpected artifact name" }
+          & .\dist\DeviceReport.exe --help
+          if ($LASTEXITCODE -ne 0) { throw "EXE help smoke test failed" }
+
+      - name: Upload DeviceReport.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeviceReport-windows-x64
+          path: dist/DeviceReport.exe
+          if-no-files-found: error
+          compression-level: 0
+

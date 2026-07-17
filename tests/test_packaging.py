@@ -1,0 +1,68 @@
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read(name):
+    return (ROOT / name).read_text(encoding="utf-8")
+
+
+def test_pyinstaller_spec_builds_named_console_exe_with_uac():
+    spec = read("DeviceReport.spec")
+
+    assert "name='DeviceReport'" in spec
+    assert "console=True" in spec
+    assert "uac_admin=True" in spec
+    assert "upx=False" in spec
+    assert "src/device_report/__main__.py" in spec.replace("\\", "/")
+
+
+def test_build_script_tests_and_verifies_single_executable():
+    script = read("build.cmd").lower()
+
+    assert "requirements-build.txt" in script
+    assert "python -m pytest" in script
+    assert "python -m pyinstaller devicereport.spec" in script
+    assert "dist\\devicereport.exe" in script
+    assert "exactly one file" in script
+
+
+def test_windows_workflow_builds_and_uploads_only_executable():
+    workflow = read(".github/workflows/build-windows.yml")
+
+    assert "windows-latest" in workflow
+    assert "python -m pytest" in workflow
+    assert "python -m PyInstaller DeviceReport.spec" in workflow
+    assert "dist/DeviceReport.exe" in workflow
+    assert "if-no-files-found: error" in workflow
+
+
+def test_readme_documents_language_modes_privacy_and_one_file_output():
+    readme = read("README.md")
+
+    assert "DeviceReport.exe --lang ru" in readme
+    assert "DeviceReport.exe --lang en" in readme
+    assert "single standalone executable" in readme
+    assert "Python is not required" in readme
+    assert "IP addresses" in readme
+    assert "serial numbers" in readme
+
+
+def test_license_allows_personal_use_and_forbids_commercial_use():
+    license_text = read("LICENSE").lower()
+
+    assert "personal and household use" in license_text
+    assert "commercial use is prohibited" in license_text
+    assert "not an open-source license" in license_text
+
+
+def test_build_requirements_are_pinned():
+    requirements = [
+        line.strip()
+        for line in read("requirements-build.txt").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+    assert requirements
+    assert all("==" in requirement for requirement in requirements)

@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+import os
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Iterable
+
+from .models import Diagnostic, ReportData, Section
+
+
+_GENERIC_DEVICE_VALUES = {
+    "default string",
+    "not applicable",
+    "not available",
+    "oem",
+    "system manufacturer",
+    "system product name",
+    "to be filled by o.e.m",
+    "to be filled by o.e.m.",
+    "to be filled by oem",
+    "unknown",
+}
+
+_INVALID_FILENAME = re.compile(r"[<>:\"/\\|?*\x00-\x1f]+")
+
+
+def _useful_device_value(value: object) -> str | None:
+    if value is None:
+        return None
+    normalized = " ".join(str(value).split()).strip(" .")
+    if not normalized or normalized.casefold() in _GENERIC_DEVICE_VALUES:
+        return None
+    return normalized
+
+
+def build_device_title(manufacturer: object, model: object) -> str | None:
+    maker = _useful_device_value(manufacturer)
+    product = _useful_device_value(model)
+    if maker and product:
+        if product.casefold().startswith(maker.casefold()):
+            return product
+        return f"{maker} {product}"
+    return product or maker
+
+
+def _safe_filename_component(value: str) -> str:
+    cleaned = _INVALID_FILENAME.sub(" ", value)
+    cleaned = " ".join(cleaned.split()).strip(" .")
+    return cleaned[:120].rstrip(" .")
+
+
+def build_output_name(device_title: str | None, now: datetime) -> Path:
+    timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+    prefix = _safe_filename_component(device_title) if device_title else ""
+    filename = f"{prefix} {timestamp}".strip() + ".docx"
+    return Path(filename)
+
+
+def _overview_values(sections: Iterable[Section]) -> tuple[object, object]:
+    overview = next((section for section in sections if section.key == "overview"), None)
+    if overview is None:
+        return None, None
+    values = {field.key.casefold(): field.value for field in overview.fields}
+    manufacturer = values.get("manufacturer", values.get("производитель"))
+    model = values.get("model", values.get("модель"))
+    return manufacturer, model
+
+
+def build_report_data(
+    language: str,
+    sections: list[Section],
+    diagnostics: list[Diagnostic],
+    *,
+    now: datetime | None = None,
+) -> ReportData:
+    generated = now or datetime.now().astimezone()
+    generated_at = generated.strftime("%Y-%m-%d %H:%M:%S")
+    manufacturer, model = _overview_values(sections)
+    title = build_device_title(manufacturer, model) or generated_at
+    return ReportData(
+        language=language,
+        title=title,
+        generated_at=generated_at,
+        sections=sections,
+        diagnostics=diagnostics,
+    )
+
+
+def resolve_output_directory(
+    *,
+    executable: str | os.PathLike[str] | None = None,
+    frozen: bool | None = None,
+    cwd: str | os.PathLike[str] | None = None,
+) -> Path:
+    is_frozen = bool(getattr(sys, "frozen", False)) if frozen is None else frozen
+    if is_frozen:
+        return Path(executable or sys.executable).resolve().parent
+    return Path(cwd or os.getcwd()).resolve()

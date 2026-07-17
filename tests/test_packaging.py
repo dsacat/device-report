@@ -18,6 +18,13 @@ def test_pyinstaller_spec_builds_named_console_exe_with_uac():
     assert "src/device_report/__main__.py" in spec.replace("\\", "/")
 
 
+def test_pyinstaller_entrypoint_uses_package_safe_absolute_import():
+    entrypoint = read("src/device_report/__main__.py")
+
+    assert "from device_report.cli import main" in entrypoint
+    assert "from .cli import main" not in entrypoint
+
+
 def test_build_script_tests_and_verifies_single_executable():
     script = read("build.cmd").lower()
 
@@ -36,6 +43,7 @@ def test_windows_workflow_builds_and_uploads_only_executable():
     assert "python -m PyInstaller DeviceReport.spec" in workflow
     assert "dist/DeviceReport.exe" in workflow
     assert "if-no-files-found: error" in workflow
+    assert "1.0.0-dev" in workflow
 
 
 def test_readme_documents_language_modes_privacy_and_one_file_output():

@@ -3,8 +3,7 @@ name: Build Windows EXE
 on:
   push:
     branches:
-      - v1.0.0
-      - feat/device-report
+      - 1.0.0-dev
   pull_request:
   workflow_dispatch:
 
@@ -52,4 +51,3 @@ jobs:
           path: dist/DeviceReport.exe
           if-no-files-found: error
           compression-level: 0
-

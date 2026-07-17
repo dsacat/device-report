@@ -1,4 +1,4 @@
-from .cli import main
+from device_report.cli import main
 
 
 raise SystemExit(main())

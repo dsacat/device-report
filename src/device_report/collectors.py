@@ -89,13 +89,14 @@ PROPERTY_LABELS: dict[str, dict[str, str]] = {
     "HotFixID": {"en": "Update ID", "ru": "Идентификатор обновления"},
     "Description": {"en": "Description", "ru": "Описание"},
     "InstalledOn": {"en": "Installed on", "ru": "Дата установки"},
+    "AntivirusSignatureLastUpdated": {"en": "Signature updated", "ru": "Обновление сигнатур"},
     "DisplayName": {"en": "Application", "ru": "Программа"},
     "DisplayVersion": {"en": "Version", "ru": "Версия"},
     "Publisher": {"en": "Publisher", "ru": "Издатель"},
 }
 
 BYTE_PROPERTIES = {"TotalPhysicalMemory", "Capacity", "AdapterRAM", "Size", "SizeRemaining"}
-DATE_PROPERTIES = {"InstallDate", "LastBootUpTime", "ReleaseDate", "DriverDate", "InstalledOn"}
+DATE_PROPERTIES = {"InstallDate", "LastBootUpTime", "ReleaseDate", "DriverDate", "InstalledOn", "AntivirusSignatureLastUpdated"}
 _JSON_DATE = re.compile(r"^/Date\((-?\d+)(?:[+-]\d{4})?\)/$")
 _DMTF_DATE = re.compile(r"^(\d{14})\.\d{6}[+-]\d{3}$")
 
@@ -256,8 +257,8 @@ COLLECTOR_SPECS = (
     ),
     CollectorSpec(
         "security",
-        "$items=@(); try {$mp=Get-MpComputerStatus; $items += [pscustomobject]@{Name='Microsoft Defender antivirus';Enabled=$mp.AntivirusEnabled;Value=$mp.AntivirusSignatureLastUpdated}} catch {}; try {Get-NetFirewallProfile | ForEach-Object {$items += [pscustomobject]@{Name=('Firewall '+$_.Name);Enabled=$_.Enabled;Value=$_.DefaultInboundAction}}} catch {}; try {$t=Get-Tpm; $items += [pscustomobject]@{Name='TPM';Enabled=$t.TpmPresent;Value=$t.TpmReady}} catch {}; try {$s=Confirm-SecureBootUEFI; $items += [pscustomobject]@{Name='Secure Boot';Enabled=$s;Value=$s}} catch {}; try {Get-BitLockerVolume | ForEach-Object {$items += [pscustomobject]@{Name=('BitLocker '+$_.MountPoint);Enabled=($_.ProtectionStatus -eq 'On');Value=$_.VolumeStatus}}} catch {}; $uac=(Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -ErrorAction SilentlyContinue).EnableLUA; $items += [pscustomobject]@{Name='User Account Control';Enabled=($uac -eq 1);Value=$uac}; $items",
-        ("Name", "Enabled", "Value"),
+        "$items=@(); try {$mp=Get-MpComputerStatus; $items += [pscustomobject]@{Name='Microsoft Defender antivirus';Enabled=$mp.AntivirusEnabled;AntivirusSignatureLastUpdated=$mp.AntivirusSignatureLastUpdated}} catch {}; try {Get-NetFirewallProfile | ForEach-Object {$items += [pscustomobject]@{Name=('Firewall '+$_.Name);Enabled=$_.Enabled;Value=$_.DefaultInboundAction}}} catch {}; try {$t=Get-Tpm; $items += [pscustomobject]@{Name='TPM';Enabled=$t.TpmPresent;Value=$t.TpmReady}} catch {}; try {$s=Confirm-SecureBootUEFI; $items += [pscustomobject]@{Name='Secure Boot';Enabled=$s;Value=$s}} catch {}; try {Get-BitLockerVolume | ForEach-Object {$items += [pscustomobject]@{Name=('BitLocker '+$_.MountPoint);Enabled=($_.ProtectionStatus -eq 'On');Value=$_.VolumeStatus}}} catch {}; $uac=(Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -ErrorAction SilentlyContinue).EnableLUA; $items += [pscustomobject]@{Name='User Account Control';Enabled=($uac -eq 1);Value=$uac}; $items",
+        ("Name", "Enabled", "Value", "AntivirusSignatureLastUpdated"),
     ),
     CollectorSpec(
         "updates",

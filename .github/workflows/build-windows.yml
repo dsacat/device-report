@@ -61,7 +61,7 @@ jobs:
           Copy-Item dist\DeviceReport.exe "$env:RUNNER_TEMP\DeviceReport.exe"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin 1.0.0
+          git fetch origin 1.0.0:refs/remotes/origin/1.0.0
           git checkout -B release-output origin/1.0.0
           git rm -rf .
           Copy-Item "$env:RUNNER_TEMP\README.md" README.md

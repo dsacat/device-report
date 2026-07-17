@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 
 from device_report.cli import choose_sections
-from device_report.collectors import COLLECTOR_SPECS, collect_all, format_date_value
+from device_report.collectors import COLLECTOR_SPECS, collect_all, collect_security, format_date_value
 from device_report.error_log import write_error_log
 from device_report.models import Diagnostic, Field, Section
 from device_report.report import build_report_data
@@ -26,6 +26,15 @@ class DateFormattingTests(TestCase):
 
     def test_malformed_date_stays_visible(self):
         self.assertEqual(format_date_value("unknown", "en"), "unknown")
+
+    def test_defender_signature_date_is_normalized(self):
+        class Runner:
+            def powershell_json(self, script):
+                return [{"Name": "Microsoft Defender", "Enabled": True, "AntivirusSignatureLastUpdated": "/Date(1770135776000)/"}]
+
+        section = collect_security(Runner(), "en")
+        self.assertIn("Signature updated", section.tables[0].headers)
+        self.assertNotIn("/Date(", repr(section.tables[0].rows))
 
 
 class SelectionTests(TestCase):
@@ -89,3 +98,8 @@ class PackagingTests(TestCase):
         info = (root / "windows-version-info.txt").read_text(encoding="utf-8")
         for value in ("dsa_cat", "DeviceReport.exe", "1.0.0.0", "Personal and household use only"):
             self.assertIn(value, info)
+
+    def test_release_fetch_populates_remote_tracking_ref(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
+        self.assertIn("1.0.0:refs/remotes/origin/1.0.0", workflow)

@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test-and-build:
@@ -51,3 +51,20 @@ jobs:
           path: dist/DeviceReport.exe
           if-no-files-found: error
           compression-level: 0
+
+      - name: Publish clean 1.0.0 branch
+        shell: pwsh
+        run: |
+          Copy-Item README.md "$env:RUNNER_TEMP\README.md"
+          Copy-Item LICENSE "$env:RUNNER_TEMP\LICENSE"
+          Copy-Item dist\DeviceReport.exe "$env:RUNNER_TEMP\DeviceReport.exe"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan release-output
+          git rm -rf .
+          Copy-Item "$env:RUNNER_TEMP\README.md" README.md
+          Copy-Item "$env:RUNNER_TEMP\LICENSE" LICENSE
+          Copy-Item "$env:RUNNER_TEMP\DeviceReport.exe" DeviceReport.exe
+          git add README.md LICENSE DeviceReport.exe
+          git commit -m "release: DeviceReport 1.0.0"
+          git push origin HEAD:refs/heads/1.0.0

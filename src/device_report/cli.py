@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .collectors import COLLECTOR_SPECS, collect_all
+from .collectors import COLLECTOR_SPECS, collect_all, collect_overview
 from .docx_writer import write_docx
 from .i18n import translate
 from .error_log import write_error_log
@@ -106,6 +106,7 @@ def run_application(
     *,
     runner: Any | None = None,
     collect_fn: Callable[..., Any] = collect_all,
+    identity_fn: Callable[[Any, str], Any] = collect_overview,
     writer: Callable[..., Path] = write_docx,
     now: datetime | None = None,
     executable: str | Path | None = None,
@@ -141,7 +142,16 @@ def run_application(
         if "selected_keys" in inspect.signature(collect_fn).parameters:
             collect_arguments["selected_keys"] = selected_keys
         sections, diagnostics = collect_fn(active_runner, language, **collect_arguments)
-        report = build_report_data(language, sections, diagnostics, now=generated)
+        identity_section = None
+        if selected_keys is not None and "overview" not in selected_keys:
+            try:
+                identity_section = identity_fn(active_runner, language)
+            except Exception as exc:
+                diagnostics.append(Diagnostic("identity", safe_error(exc)))
+        identity_sections = [identity_section, *sections] if identity_section is not None else sections
+        report = build_report_data(language, identity_sections, diagnostics, now=generated)
+        report.sections = sections
+        report.selected_sections = tuple(section.title for section in sections)
         device_title = report.title if report.title != report.generated_at else None
         output_path = directory / build_output_name(device_title, generated)
         output_fn(translate(language, "writing"))

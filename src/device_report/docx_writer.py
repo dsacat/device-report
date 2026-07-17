@@ -145,9 +145,11 @@ def _render_data_table(document: DocumentType, source: Table) -> bool:
     header_cells = table.rows[0].cells
     for index, label in enumerate(headers):
         header_cells[index].text = str(label)
-        _set_cell_shading(header_cells[index], LIGHT_ACCENT)
+        _set_cell_shading(header_cells[index], ACCENT)
         if header_cells[index].paragraphs[0].runs:
-            header_cells[index].paragraphs[0].runs[0].bold = True
+            header_run = header_cells[index].paragraphs[0].runs[0]
+            header_run.bold = True
+            header_run.font.color.rgb = RGBColor(255, 255, 255)
     _repeat_table_header(table.rows[0])
     for row_index, row in enumerate(rows):
         cells = table.add_row().cells
@@ -191,14 +193,32 @@ def write_docx(report: ReportData, output_path: str | Path) -> Path:
     document = Document()
     document.core_properties.title = report.title
     document.core_properties.subject = translate(report.language, "app_name")
+    document.core_properties.author = "dsa_cat"
+    document.core_properties.comments = "Personal and household use only"
     _configure_styles(document)
     _configure_sections(document, report)
 
     title = document.add_heading(report.title, level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    subtitle = document.add_paragraph(style="Report Subtitle")
-    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    subtitle.add_run(f"{translate(report.language, 'report_date')}: {report.generated_at}")
+    if report.subtitle:
+        identity = document.add_paragraph(style="Report Subtitle")
+        identity.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = identity.add_run(report.subtitle)
+        run.bold = True
+        run.font.size = Pt(13)
+    date_line = document.add_paragraph(style="Report Subtitle")
+    date_line.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    date_line.add_run(f"{translate(report.language, 'report_date')}: {report.generated_at}")
+    divider = document.add_paragraph()
+    divider.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    divider_run = divider.add_run("━━━━━━━━━━━━━━━━━━━━━━━━")
+    divider_run.font.color.rgb = RGBColor.from_string(ACCENT)
+    if report.selected_sections:
+        summary = document.add_paragraph()
+        summary.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        label = summary.add_run(f"{translate(report.language, 'included_sections')}: ")
+        label.bold = True
+        summary.add_run(", ".join(report.selected_sections))
     toc_label = "Содержание" if report.language == "ru" else "Contents"
     toc_heading = document.add_paragraph()
     toc_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT

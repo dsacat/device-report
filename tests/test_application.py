@@ -55,6 +55,7 @@ def test_run_application_writes_beside_executable_and_prints_full_progress(tmp_p
         "Completed: Device overview",
         "Creating DOCX report...",
         f"Report saved: {writes[0][1]}",
+        f"Error log saved: {tmp_path / 'logs' / 'DeviceReport_errors_2026-07-17_18-30-00.log'}",
     ]
 
 
@@ -95,7 +96,7 @@ def test_main_with_lang_runs_without_interactive_input():
 
 
 def test_main_without_lang_uses_menu_and_pauses_after_run():
-    answers = iter(["2", ""])
+    answers = iter(["2", "1", ""])
     calls = []
 
     result = main(
@@ -110,7 +111,7 @@ def test_main_without_lang_uses_menu_and_pauses_after_run():
 
 
 def test_main_no_pause_skips_final_prompt_after_menu():
-    answers = iter(["1"])
+    answers = iter(["1", "1"])
 
     result = main(
         ["--no-pause"],

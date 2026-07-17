@@ -58,14 +58,15 @@ def build_output_name(device_title: str | None, now: datetime) -> Path:
     return Path(filename)
 
 
-def _overview_values(sections: Iterable[Section]) -> tuple[object, object]:
+def _overview_values(sections: Iterable[Section]) -> tuple[object, object, object]:
     overview = next((section for section in sections if section.key == "overview"), None)
     if overview is None:
-        return None, None
+        return None, None, None
     values = {field.key.casefold(): field.value for field in overview.fields}
     manufacturer = values.get("manufacturer", values.get("производитель"))
     model = values.get("model", values.get("модель"))
-    return manufacturer, model
+    marketing = values.get("marketing name", values.get("название модели"))
+    return manufacturer, model, marketing
 
 
 def build_report_data(
@@ -77,12 +78,17 @@ def build_report_data(
 ) -> ReportData:
     generated = now or datetime.now().astimezone()
     generated_at = generated.strftime("%Y-%m-%d %H:%M:%S")
-    manufacturer, model = _overview_values(sections)
-    title = build_device_title(manufacturer, model) or generated_at
+    manufacturer, model, marketing = _overview_values(sections)
+    machine_title = build_device_title(manufacturer, model)
+    marketing_title = _useful_device_value(marketing)
+    title = marketing_title or machine_title or generated_at
+    subtitle = machine_title if marketing_title and machine_title and machine_title.casefold() != marketing_title.casefold() else None
     return ReportData(
         language=language,
         title=title,
+        subtitle=subtitle,
         generated_at=generated_at,
+        selected_sections=tuple(section.title for section in sections),
         sections=sections,
         diagnostics=diagnostics,
     )

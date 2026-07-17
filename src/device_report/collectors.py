@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Any, Callable
 
 from .models import Diagnostic, Field, Section, Table
@@ -28,6 +30,7 @@ PROPERTY_LABELS: dict[str, dict[str, str]] = {
     "Category": {"en": "Category", "ru": "Категория"},
     "Manufacturer": {"en": "Manufacturer", "ru": "Производитель"},
     "Model": {"en": "Model", "ru": "Модель"},
+    "MarketingName": {"en": "Marketing name", "ru": "Название модели"},
     "SystemType": {"en": "System type", "ru": "Тип системы"},
     "TotalPhysicalMemory": {"en": "Total memory", "ru": "Общий объём памяти"},
     "NumberOfProcessors": {"en": "Processor sockets", "ru": "Процессорных сокетов"},
@@ -86,12 +89,16 @@ PROPERTY_LABELS: dict[str, dict[str, str]] = {
     "HotFixID": {"en": "Update ID", "ru": "Идентификатор обновления"},
     "Description": {"en": "Description", "ru": "Описание"},
     "InstalledOn": {"en": "Installed on", "ru": "Дата установки"},
+    "AntivirusSignatureLastUpdated": {"en": "Signature updated", "ru": "Обновление сигнатур"},
     "DisplayName": {"en": "Application", "ru": "Программа"},
     "DisplayVersion": {"en": "Version", "ru": "Версия"},
     "Publisher": {"en": "Publisher", "ru": "Издатель"},
 }
 
 BYTE_PROPERTIES = {"TotalPhysicalMemory", "Capacity", "AdapterRAM", "Size", "SizeRemaining"}
+DATE_PROPERTIES = {"InstallDate", "LastBootUpTime", "ReleaseDate", "DriverDate", "InstalledOn", "AntivirusSignatureLastUpdated"}
+_JSON_DATE = re.compile(r"^/Date\((-?\d+)(?:[+-]\d{4})?\)/$")
+_DMTF_DATE = re.compile(r"^(\d{14})\.\d{6}[+-]\d{3}$")
 
 
 def format_bytes(value: Any) -> str:
@@ -112,17 +119,46 @@ def _label(property_name: str, language: str) -> str:
     return PROPERTY_LABELS.get(property_name, {}).get(language, property_name)
 
 
+def format_date_value(value: Any, language: str) -> str:
+    parsed: date | datetime | None = None
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, date):
+        parsed = value
+    elif isinstance(value, str):
+        text = value.strip()
+        match = _JSON_DATE.fullmatch(text)
+        try:
+            if match:
+                parsed = datetime.fromtimestamp(int(match.group(1)) / 1000).astimezone()
+            elif re.fullmatch(r"\d{8}", text):
+                parsed = datetime.strptime(text, "%Y%m%d").date()
+            elif (match := _DMTF_DATE.fullmatch(text)):
+                parsed = datetime.strptime(match.group(1), "%Y%m%d%H%M%S")
+            elif "T" in text:
+                parsed = datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone()
+        except (OverflowError, OSError, ValueError):
+            parsed = None
+        if parsed is None:
+            return text
+    else:
+        return str(value)
+    if isinstance(parsed, datetime):
+        return parsed.strftime("%d.%m.%Y %H:%M:%S" if language == "ru" else "%Y-%m-%d %H:%M:%S")
+    return parsed.strftime("%d.%m.%Y" if language == "ru" else "%Y-%m-%d")
+
+
 def _format_value(property_name: str, value: Any, language: str) -> Any:
     if value is None or value == "":
         return ""
     if property_name in BYTE_PROPERTIES:
         return format_bytes(value)
+    if property_name in DATE_PROPERTIES:
+        return format_date_value(value, language)
     if isinstance(value, bool):
         return ("Yes" if value else "No") if language == "en" else ("Да" if value else "Нет")
     if isinstance(value, (list, tuple)):
         return ", ".join(str(item) for item in value if item not in (None, ""))
-    if isinstance(value, str) and "T" in value and len(value) >= 19:
-        return value[:19].replace("T", " ")
     return value
 
 
@@ -164,8 +200,8 @@ class CollectorSpec:
 COLLECTOR_SPECS = (
     CollectorSpec(
         "overview",
-        "Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer,Model,SystemType,TotalPhysicalMemory,NumberOfProcessors,NumberOfLogicalProcessors",
-        ("Manufacturer", "Model", "SystemType", "TotalPhysicalMemory", "NumberOfProcessors", "NumberOfLogicalProcessors"),
+        "$system=Get-CimInstance Win32_ComputerSystem; $product=Get-CimInstance Win32_ComputerSystemProduct; [pscustomobject]@{Manufacturer=$system.Manufacturer;Model=$system.Model;MarketingName=$product.Version;SystemType=$system.SystemType;TotalPhysicalMemory=$system.TotalPhysicalMemory;NumberOfProcessors=$system.NumberOfProcessors;NumberOfLogicalProcessors=$system.NumberOfLogicalProcessors}",
+        ("Manufacturer", "Model", "MarketingName", "SystemType", "TotalPhysicalMemory", "NumberOfProcessors", "NumberOfLogicalProcessors"),
         table=False,
     ),
     CollectorSpec(
@@ -221,8 +257,8 @@ COLLECTOR_SPECS = (
     ),
     CollectorSpec(
         "security",
-        "$items=@(); try {$mp=Get-MpComputerStatus; $items += [pscustomobject]@{Name='Microsoft Defender antivirus';Enabled=$mp.AntivirusEnabled;Value=$mp.AntivirusSignatureLastUpdated}} catch {}; try {Get-NetFirewallProfile | ForEach-Object {$items += [pscustomobject]@{Name=('Firewall '+$_.Name);Enabled=$_.Enabled;Value=$_.DefaultInboundAction}}} catch {}; try {$t=Get-Tpm; $items += [pscustomobject]@{Name='TPM';Enabled=$t.TpmPresent;Value=$t.TpmReady}} catch {}; try {$s=Confirm-SecureBootUEFI; $items += [pscustomobject]@{Name='Secure Boot';Enabled=$s;Value=$s}} catch {}; try {Get-BitLockerVolume | ForEach-Object {$items += [pscustomobject]@{Name=('BitLocker '+$_.MountPoint);Enabled=($_.ProtectionStatus -eq 'On');Value=$_.VolumeStatus}}} catch {}; $uac=(Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -ErrorAction SilentlyContinue).EnableLUA; $items += [pscustomobject]@{Name='User Account Control';Enabled=($uac -eq 1);Value=$uac}; $items",
-        ("Name", "Enabled", "Value"),
+        "$items=@(); try {$mp=Get-MpComputerStatus; $items += [pscustomobject]@{Name='Microsoft Defender antivirus';Enabled=$mp.AntivirusEnabled;AntivirusSignatureLastUpdated=$mp.AntivirusSignatureLastUpdated}} catch {}; try {Get-NetFirewallProfile | ForEach-Object {$items += [pscustomobject]@{Name=('Firewall '+$_.Name);Enabled=$_.Enabled;Value=$_.DefaultInboundAction}}} catch {}; try {$t=Get-Tpm; $items += [pscustomobject]@{Name='TPM';Enabled=$t.TpmPresent;Value=$t.TpmReady}} catch {}; try {$s=Confirm-SecureBootUEFI; $items += [pscustomobject]@{Name='Secure Boot';Enabled=$s;Value=$s}} catch {}; try {Get-BitLockerVolume | ForEach-Object {$items += [pscustomobject]@{Name=('BitLocker '+$_.MountPoint);Enabled=($_.ProtectionStatus -eq 'On');Value=$_.VolumeStatus}}} catch {}; $uac=(Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -ErrorAction SilentlyContinue).EnableLUA; $items += [pscustomobject]@{Name='User Account Control';Enabled=($uac -eq 1);Value=$uac}; $items",
+        ("Name", "Enabled", "Value", "AntivirusSignatureLastUpdated"),
     ),
     CollectorSpec(
         "updates",
@@ -304,11 +340,18 @@ def collect_all(
     language: str,
     *,
     progress: Callable[[str, str], None] | None = None,
+    selected_keys: tuple[str, ...] | list[str] | set[str] | None = None,
 ) -> tuple[list[Section], list[Diagnostic]]:
     notify = progress or (lambda phase, title: None)
     sections: list[Section] = []
     diagnostics: list[Diagnostic] = []
+    selected = None if selected_keys is None else set(selected_keys)
+    unknown = set() if selected is None else selected.difference(spec.key for spec in COLLECTOR_SPECS)
+    if unknown:
+        raise ValueError(f"unknown collector key: {sorted(unknown)[0]}")
     for spec in COLLECTOR_SPECS:
+        if selected is not None and spec.key not in selected:
+            continue
         title = spec.titles[language]
         notify("collecting", title)
         try:

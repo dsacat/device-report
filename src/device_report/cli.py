@@ -146,6 +146,7 @@ def run_application(
         output_path = directory / build_output_name(device_title, generated)
         output_fn(translate(language, "writing"))
         result = writer(report, output_path)
+        output_fn(translate(language, "saved", path=Path(result).resolve()))
         try:
             log_path = write_error_log(directory, diagnostics, now=generated)
         except OSError:
@@ -164,7 +165,6 @@ def run_application(
                 output_fn(translate(language, "log_saved", path=log_path.resolve()))
         output_fn(translate(language, "fatal", message=category))
         return 1
-    output_fn(translate(language, "saved", path=Path(result).resolve()))
     return 0
 
 

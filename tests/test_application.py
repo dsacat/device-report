@@ -55,6 +55,7 @@ def test_run_application_writes_beside_executable_and_prints_full_progress(tmp_p
         "Completed: Device overview",
         "Creating DOCX report...",
         f"Report saved: {writes[0][1]}",
+        f"Error log saved: {tmp_path / 'logs' / 'DeviceReport_errors_2026-07-17_18-30-00.log'}",
     ]
 
 

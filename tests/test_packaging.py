@@ -45,10 +45,12 @@ def test_windows_workflow_builds_and_uploads_only_executable():
     assert "if-no-files-found: error" in workflow
     assert "1.0.0-dev" in workflow
     assert "contents: write" in workflow
-    assert "git checkout --orphan release-output" in workflow
+    assert "git checkout -B release-output origin/1.0.0" in workflow
     assert "git add README.md LICENSE DeviceReport.exe" in workflow
     assert "HEAD:refs/heads/1.0.0" in workflow
     assert "--force" not in workflow
+    assert "git push origin --delete v1.0.0" in workflow
+    assert "github.event_name == 'push'" in workflow
 
 
 def test_readme_documents_language_modes_privacy_and_one_file_output():

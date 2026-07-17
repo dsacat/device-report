@@ -13,6 +13,8 @@ Double-click `DeviceReport.exe` and choose a language:
 2 — English
 ```
 
+After choosing a language, select either all report sections or a custom set. In custom mode every section has an individual yes/no prompt, so Windows updates, installed software, drivers, or any other section can be omitted.
+
 The language can also be selected from a terminal:
 
 ```powershell
@@ -21,6 +23,12 @@ DeviceReport.exe --lang en
 ```
 
 The generated DOCX is saved beside `DeviceReport.exe`. Its name contains the useful manufacturer/model values when Windows provides them, followed by the report date and time.
+
+For systems that expose both a marketing name and a machine-type code, the marketing name is the main document title and the manufacturer/code appears below it. For example, a Lenovo report can show `IdeaPad 3 15ARE05` above `LENOVO 81W4`.
+
+Provider dates are normalized into readable localized values. Raw PowerShell values such as `/Date(1770135776000)/` are never written to the report.
+
+If collection errors occur, a privacy-safe error-only log is created under `logs` beside the report. Successful runs create no log and no `logs` directory.
 
 ## Report contents
 
@@ -89,4 +97,3 @@ The project targets Python 3.11 and Windows 10/11. Automated unit tests use dete
 ## License
 
 This project uses a custom personal and household use license. Commercial use is prohibited. See [LICENSE](LICENSE).
-

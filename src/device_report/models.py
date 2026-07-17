@@ -48,5 +48,7 @@ class ReportData:
     language: str
     title: str
     generated_at: str
+    subtitle: str | None = None
+    selected_sections: tuple[str, ...] = ()
     sections: list[Section] = field(default_factory=list)
     diagnostics: list[Diagnostic] = field(default_factory=list)

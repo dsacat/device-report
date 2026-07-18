@@ -17,6 +17,7 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
+    module_collection_mode={'docx.parts': 'pyc'},
     optimize=1,
 )
 pyz = PYZ(a.pure)

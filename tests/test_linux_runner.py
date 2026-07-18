@@ -25,6 +25,7 @@ class LinuxRunnerTests(TestCase):
             runner = LinuxRunner(root=root, process=process)
 
             self.assertEqual(runner.read_optional("/proc/example"), "safe")
+            self.assertEqual(runner._path(r"\proc\example"), target)
             self.assertEqual(runner.command_json(["tool", "--json"]), {"items": [1]})
 
         self.assertEqual(calls[0][0], ["tool", "--json"])

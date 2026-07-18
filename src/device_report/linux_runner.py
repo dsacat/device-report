@@ -4,7 +4,7 @@ import json
 import shutil
 import subprocess
 from collections.abc import Callable, Iterable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .runner import CommandError, CommandResult, CommandTimeout
@@ -25,10 +25,11 @@ class LinuxRunner:
         self._which = which
 
     def _path(self, path: str | Path) -> Path:
-        source = Path(path)
+        source = PurePosixPath(str(path).replace("\\", "/"))
         if self.root == Path("/"):
-            return source
-        return self.root / str(source).lstrip("/")
+            return Path(str(source))
+        parts = source.parts[1:] if source.is_absolute() else source.parts
+        return self.root.joinpath(*parts)
 
     def read_optional(self, path: str | Path, *, binary: bool = False) -> str | bytes | None:
         try:

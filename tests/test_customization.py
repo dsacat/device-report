@@ -83,6 +83,19 @@ class IdentityTests(TestCase):
         self.assertEqual(report.title, "Aspire A515-57")
         self.assertEqual(report.subtitle, "Acer N20C5")
 
+    def test_product_name_is_preferred_over_longer_firmware_family(self):
+        overview = Section("overview", "Device overview", fields=[
+            Field("Manufacturer", "HP"),
+            Field("Model", "8AB1"),
+            Field("System family", "103C_5336AN HP EliteBook Mobile System"),
+            Field("Product name", "HP EliteBook 840 G5"),
+        ])
+
+        report = build_report_data("en", [overview], [], now=FIXED)
+
+        self.assertEqual(report.title, "HP EliteBook 840 G5")
+        self.assertEqual(report.subtitle, "HP 8AB1")
+
     def test_identity_is_collected_even_when_overview_is_not_selected(self):
         captured = []
 
@@ -163,4 +176,4 @@ class PackagingTests(TestCase):
     def test_release_removes_completed_service_branches(self):
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
-        self.assertIn("git push origin --delete feature/report-customization", workflow)
+        self.assertIn("git push origin --delete feature/identity-fix", workflow)

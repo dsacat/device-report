@@ -19,9 +19,12 @@ VSVersionInfo(
           StringStruct('FileVersion', '1.0.0.0'),
           StringStruct('InternalName', 'DeviceReport'),
           StringStruct('LegalCopyright', 'Copyright © 2026 dsa_cat'),
+          StringStruct('LegalTrademarks', 'DeviceReport'),
           StringStruct('OriginalFilename', 'DeviceReport.exe'),
+          StringStruct('PrivateBuild', 'Official 1.0.0 release'),
           StringStruct('ProductName', 'DeviceReport'),
           StringStruct('ProductVersion', '1.0.0.0'),
+          StringStruct('SpecialBuild', 'Windows x64'),
           StringStruct('Comments', 'Personal and household use only')
         ]
       )

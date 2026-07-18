@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "windows-device-report"
+name = "device-report"
 version = "1.0.0"
-description = "Privacy-safe bilingual Windows device inventory report generator"
+description = "Privacy-safe bilingual Windows and Linux device inventory report generator"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { file = "LICENSE" }
@@ -28,4 +28,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
-

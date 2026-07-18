@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build DeviceReport 1.0.0
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  test-and-build:
+  build-windows:
     runs-on: windows-latest
     steps:
       - name: Check out repository
@@ -32,10 +32,10 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
-      - name: Build one-file executable
+      - name: Build Windows one-file executable
         run: python -m PyInstaller DeviceReport.spec --clean --noconfirm
 
-      - name: Verify executable and help
+      - name: Verify Windows executable
         shell: pwsh
         run: |
           $files = @(Get-ChildItem -Path dist -File)
@@ -43,8 +43,10 @@ jobs:
           if ($files[0].Name -ne "DeviceReport.exe") { throw "unexpected artifact name" }
           & .\dist\DeviceReport.exe --help
           if ($LASTEXITCODE -ne 0) { throw "EXE help smoke test failed" }
+          & .\dist\DeviceReport.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "EXE version smoke test failed" }
 
-      - name: Upload DeviceReport.exe
+      - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
           name: DeviceReport-windows-x64
@@ -52,25 +54,91 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Publish clean 1.0.0 branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/1.0.0-dev'
-        shell: pwsh
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Install dependencies
         run: |
-          Copy-Item README.md "$env:RUNNER_TEMP\README.md"
-          Copy-Item LICENSE "$env:RUNNER_TEMP\LICENSE"
-          Copy-Item dist\DeviceReport.exe "$env:RUNNER_TEMP\DeviceReport.exe"
+          python -m pip install --disable-pip-version-check -r requirements-build.txt
+          python -m pip install --disable-pip-version-check --no-deps -e .
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build Linux one-file executable
+        run: python -m PyInstaller DeviceReport-linux.spec --clean --noconfirm
+
+      - name: Verify Linux executable
+        run: |
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 1
+          test -f dist/DeviceReport-linux-x86_64
+          chmod +x dist/DeviceReport-linux-x86_64
+          ./dist/DeviceReport-linux-x86_64 --help
+          ./dist/DeviceReport-linux-x86_64 --version
+
+      - name: Upload Linux executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeviceReport-linux-x86_64
+          path: dist/DeviceReport-linux-x86_64
+          if-no-files-found: error
+          compression-level: 0
+
+  publish-release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/1.0.0-dev'
+    needs:
+      - build-windows
+      - build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download Windows executable
+        uses: actions/download-artifact@v4
+        with:
+          name: DeviceReport-windows-x64
+          path: release-assets/windows
+
+      - name: Download Linux executable
+        uses: actions/download-artifact@v4
+        with:
+          name: DeviceReport-linux-x86_64
+          path: release-assets/linux
+
+      - name: Publish clean 1.0.0 branch and remove intermediate branches
+        run: |
+          set -euo pipefail
+          test -f release-assets/windows/DeviceReport.exe
+          test -f release-assets/linux/DeviceReport-linux-x86_64
+          cp README.md "$RUNNER_TEMP/README.md"
+          cp LICENSE "$RUNNER_TEMP/LICENSE"
+          cp release-assets/windows/DeviceReport.exe "$RUNNER_TEMP/DeviceReport.exe"
+          cp release-assets/linux/DeviceReport-linux-x86_64 "$RUNNER_TEMP/DeviceReport-linux-x86_64"
+          chmod +x "$RUNNER_TEMP/DeviceReport-linux-x86_64"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin 1.0.0:refs/remotes/origin/1.0.0
           git checkout -B release-output origin/1.0.0
           git rm -rf .
-          Copy-Item "$env:RUNNER_TEMP\README.md" README.md
-          Copy-Item "$env:RUNNER_TEMP\LICENSE" LICENSE
-          Copy-Item "$env:RUNNER_TEMP\DeviceReport.exe" DeviceReport.exe
-          git add README.md LICENSE DeviceReport.exe
-          git commit -m "release: DeviceReport 1.0.0"
+          cp "$RUNNER_TEMP/README.md" README.md
+          cp "$RUNNER_TEMP/LICENSE" LICENSE
+          cp "$RUNNER_TEMP/DeviceReport.exe" DeviceReport.exe
+          cp "$RUNNER_TEMP/DeviceReport-linux-x86_64" DeviceReport-linux-x86_64
+          chmod +x DeviceReport-linux-x86_64
+          git add README.md LICENSE DeviceReport.exe DeviceReport-linux-x86_64
+          git commit -m "release: DeviceReport 1.0.0 for Windows and Linux"
           git push origin HEAD:refs/heads/1.0.0
-          $legacy = git ls-remote --heads origin refs/heads/v1.0.0
-          if ($legacy) { git push origin --delete v1.0.0 }
-          $customization = git ls-remote --heads origin refs/heads/feature/report-customization
-          if ($customization) { git push origin --delete feature/report-customization }
+          if git ls-remote --exit-code --heads origin refs/heads/feature/identity-fix >/dev/null 2>&1; then
+            git push origin --delete feature/identity-fix
+          fi

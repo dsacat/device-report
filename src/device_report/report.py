@@ -96,16 +96,14 @@ def _best_marketing_title(candidates: Iterable[object], manufacturer: object, mo
     if not useful:
         return None
 
-    def score(value: str) -> tuple[int, int, int, int]:
-        words = value.split()
-        return (
-            int(any(character.isalpha() for character in value) and len(words) > 1),
-            len(words),
-            sum(character.isalpha() for character in value),
-            len(value),
-        )
-
-    return max(useful, key=score)
+    return next(
+        (
+            value
+            for value in useful
+            if any(character.isalpha() for character in value) and len(value.split()) > 1
+        ),
+        useful[0],
+    )
 
 
 def build_report_data(

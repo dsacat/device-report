@@ -7,20 +7,29 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .collectors import COLLECTOR_SPECS, collect_all, collect_overview
+from . import __version__
+from .backend import Backend, resolve_backend
 from .docx_writer import write_docx
 from .i18n import translate
 from .error_log import write_error_log
 from .models import Diagnostic
 from .privacy import safe_error
 from .report import build_output_name, build_report_data, resolve_output_directory
-from .runner import CommandRunner
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(backend: Backend | None = None) -> argparse.ArgumentParser:
+    active_backend = backend or resolve_backend()
     parser = argparse.ArgumentParser(
-        prog="DeviceReport.exe",
-        description="Create a bilingual privacy-safe Windows device report in DOCX format.",
+        prog=active_backend.executable_name,
+        description="Create a bilingual privacy-safe device report in DOCX format.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=(
+            f"DeviceReport {__version__} | Author: dsa_cat | "
+            f"License: personal and household use only | Platform: {active_backend.platform_label}"
+        ),
     )
     parser.add_argument(
         "--lang",
@@ -29,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--select", action="store_true", help="choose report sections interactively")
     parser.add_argument(
-        "--section", action="append", choices=tuple(spec.key for spec in COLLECTOR_SPECS),
+        "--section", action="append", choices=tuple(spec.key for spec in active_backend.specs),
         help="include one section; may be repeated",
     )
     parser.add_argument(
@@ -73,21 +82,23 @@ def choose_sections(
     *,
     input_fn: Callable[[str], str] = input,
     output_fn: Callable[[str], None] = print,
+    specs: tuple[Any, ...] | None = None,
 ) -> tuple[str, ...]:
+    active_specs = specs or resolve_backend().specs
     output_fn("")
     output_fn(translate(language, "sections_mode"))
     output_fn(translate(language, "sections_all"))
     output_fn(translate(language, "sections_custom"))
     mode = _answer_one_or_two(translate("en", "menu_prompt"), input_fn=input_fn, output_fn=output_fn)
     if mode == "1":
-        selected = tuple(spec.key for spec in COLLECTOR_SPECS)
+        selected = tuple(spec.key for spec in active_specs)
     else:
         while True:
             selected = tuple(
                 spec.key
-                for index, spec in enumerate(COLLECTOR_SPECS, 1)
+                for index, spec in enumerate(active_specs, 1)
                 if _answer_one_or_two(
-                    translate(language, "section_prompt", index=index, total=len(COLLECTOR_SPECS), section=spec.titles[language]),
+                    translate(language, "section_prompt", index=index, total=len(active_specs), section=spec.titles[language]),
                     input_fn=input_fn,
                     output_fn=output_fn,
                 ) == "1"
@@ -97,16 +108,17 @@ def choose_sections(
             output_fn(translate(language, "sections_empty"))
     output_fn(translate(language, "sections_selected", count=len(selected)))
     for index, key in enumerate(selected, 1):
-        output_fn(f"  {index:02d}. {next(spec.titles[language] for spec in COLLECTOR_SPECS if spec.key == key)}")
+        output_fn(f"  {index:02d}. {next(spec.titles[language] for spec in active_specs if spec.key == key)}")
     return selected
 
 
 def run_application(
     language: str,
     *,
+    backend: Backend | None = None,
     runner: Any | None = None,
-    collect_fn: Callable[..., Any] = collect_all,
-    identity_fn: Callable[[Any, str], Any] = collect_overview,
+    collect_fn: Callable[..., Any] | None = None,
+    identity_fn: Callable[[Any, str], Any] | None = None,
     writer: Callable[..., Path] = write_docx,
     now: datetime | None = None,
     executable: str | Path | None = None,
@@ -115,6 +127,9 @@ def run_application(
     output_fn: Callable[[str], None] = print,
     selected_keys: tuple[str, ...] | None = None,
 ) -> int:
+    active_backend = backend or resolve_backend()
+    active_collect = collect_fn or active_backend.collect_all
+    active_identity = identity_fn or active_backend.collect_identity
     generated = now or datetime.now().astimezone()
     output_fn(translate(language, "starting"))
 
@@ -131,7 +146,7 @@ def run_application(
         else:
             output_fn(translate(language, phase, section=display_title))
 
-    active_runner = runner or CommandRunner()
+    active_runner = runner or active_backend.runner_factory()
     directory = resolve_output_directory(
         executable=executable,
         frozen=frozen,
@@ -139,13 +154,13 @@ def run_application(
     )
     try:
         collect_arguments = {"progress": progress}
-        if "selected_keys" in inspect.signature(collect_fn).parameters:
+        if "selected_keys" in inspect.signature(active_collect).parameters:
             collect_arguments["selected_keys"] = selected_keys
-        sections, diagnostics = collect_fn(active_runner, language, **collect_arguments)
+        sections, diagnostics = active_collect(active_runner, language, **collect_arguments)
         identity_section = None
         if selected_keys is not None and "overview" not in selected_keys:
             try:
-                identity_section = identity_fn(active_runner, language)
+                identity_section = active_identity(active_runner, language)
             except Exception as exc:
                 diagnostics.append(Diagnostic("identity", safe_error(exc)))
         identity_sections = [identity_section, *sections] if identity_section is not None else sections
@@ -185,14 +200,16 @@ def main(
     output_fn: Callable[[str], None] = print,
     run_fn: Callable[..., int] = run_application,
 ) -> int:
-    args = build_parser().parse_args(argv)
+    backend = resolve_backend()
+    parser = build_parser(backend)
+    args = parser.parse_args(argv)
     if args.select and args.section:
-        build_parser().error("--select and --section cannot be used together")
+        parser.error("--select and --section cannot be used together")
     interactive = args.lang is None
     language = args.lang or choose_language(input_fn=input_fn, output_fn=output_fn)
     selected = tuple(dict.fromkeys(args.section)) if args.section else (
-        choose_sections(language, input_fn=input_fn, output_fn=output_fn)
-        if interactive or args.select else tuple(spec.key for spec in COLLECTOR_SPECS)
+        choose_sections(language, input_fn=input_fn, output_fn=output_fn, specs=backend.specs)
+        if interactive or args.select else tuple(spec.key for spec in backend.specs)
     )
     run_arguments: dict[str, Any] = {"output_fn": output_fn}
     signature = inspect.signature(run_fn)
@@ -200,6 +217,10 @@ def main(
         parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
     ):
         run_arguments["selected_keys"] = selected
+    if "backend" in signature.parameters or any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
+    ):
+        run_arguments["backend"] = backend
     result = run_fn(language, **run_arguments)
     if interactive and not args.no_pause:
         input_fn(translate(language, "press_enter"))

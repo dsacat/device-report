@@ -28,6 +28,12 @@ def test_linux_pyinstaller_spec_builds_named_console_binary_without_elevation():
     assert "src/device_report/__main__.py" in spec.replace("\\", "/")
 
 
+def test_pyinstaller_specs_extract_docx_parts_for_template_relative_paths():
+    for name in ("DeviceReport.spec", "DeviceReport-linux.spec"):
+        spec = read(name)
+        assert "module_collection_mode={'docx.parts': 'pyc'}" in spec
+
+
 def test_windows_version_resource_populates_standard_file_information():
     info = read("windows-version-info.txt")
 
@@ -77,6 +83,8 @@ def test_workflow_builds_windows_and_linux_and_publishes_both_binaries():
     assert "dist/DeviceReport-linux-x86_64" in workflow
     assert "DeviceReport-windows-x64" in workflow
     assert "DeviceReport-linux-x86_64" in workflow
+    assert "--lang en --section overview" in workflow
+    assert "*.docx" in workflow
     assert "if-no-files-found: error" in workflow
     assert "1.0.0-dev" in workflow
     assert "contents: write" in workflow

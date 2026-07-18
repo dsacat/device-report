@@ -45,6 +45,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "EXE help smoke test failed" }
           & .\dist\DeviceReport.exe --version
           if ($LASTEXITCODE -ne 0) { throw "EXE version smoke test failed" }
+          & .\dist\DeviceReport.exe --lang en --section overview
+          if ($LASTEXITCODE -ne 0) { throw "EXE report smoke test failed" }
+          $reports = @(Get-ChildItem -Path dist -File -Filter *.docx)
+          if ($reports.Count -ne 1) { throw "EXE must create exactly one DOCX report" }
+          Remove-Item -LiteralPath $reports[0].FullName
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
@@ -85,6 +90,9 @@ jobs:
           chmod +x dist/DeviceReport-linux-x86_64
           ./dist/DeviceReport-linux-x86_64 --help
           ./dist/DeviceReport-linux-x86_64 --version
+          ./dist/DeviceReport-linux-x86_64 --lang en --section overview
+          test "$(find dist -maxdepth 1 -type f -name '*.docx' | wc -l)" -eq 1
+          find dist -maxdepth 1 -type f -name '*.docx' -delete
 
       - name: Upload Linux executable
         uses: actions/upload-artifact@v4
@@ -141,4 +149,7 @@ jobs:
           git push origin HEAD:refs/heads/1.0.0
           if git ls-remote --exit-code --heads origin refs/heads/feature/identity-fix >/dev/null 2>&1; then
             git push origin --delete feature/identity-fix
+          fi
+          if git ls-remote --exit-code --heads origin refs/heads/feature/linux-docx-fix >/dev/null 2>&1; then
+            git push origin --delete feature/linux-docx-fix
           fi
